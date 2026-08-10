@@ -1,0 +1,6 @@
+{
+  "name": "AseoPlanner - Gestión de Limpieza",
+  "description": "Sistema de administración de servicios de limpieza de departamentos con calendario interactivo, panel de control para administradores, vista para empleados y sincronización con Google Calendar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
