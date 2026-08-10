@@ -9,9 +9,6 @@ export default function handler(req: any, res: any) {
         urlObj.searchParams.delete('0');
         const search = urlObj.search;
         req.url = '/api/' + routePath.replace(/^\//, '') + search;
-      } else if (req.url.includes('/api/index')) {
-        const cleanPath = req.url.replace(/\/api\/index(\.ts)?/, '') || '/';
-        req.url = cleanPath.startsWith('/api') ? cleanPath : '/api' + (cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath);
       } else if (!req.url.startsWith('/api')) {
         req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
       }

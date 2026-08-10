@@ -596,7 +596,7 @@ apiRouter.post("/calendar/sync-event", (req, res) => {
   });
 });
 
-// Mount router under both /api and / so all Vercel route rewrites resolve cleanly
+// Mount router under both /api and / so all Vercel and local route rewrites match cleanly
 app.use("/api", apiRouter);
 app.use("/", apiRouter);
 
