@@ -246,342 +246,348 @@ app.use((req, res, next) => {
   next();
 });
 
+const apiRouter = express.Router();
+
 // Health endpoint
-app.get("/api/health", (req, res) => {
+apiRouter.get("/health", (req, res) => {
   res.json({ status: "ok", appName: "AseoPlanner API" });
 });
 
-  // Admin auth & password routes
-  app.get("/api/admin/password-status", (req, res) => {
-    res.json({ isModified: isPasswordModified });
+// Admin auth & password routes
+apiRouter.get("/admin/password-status", (req, res) => {
+  res.json({ isModified: isPasswordModified });
+});
+
+apiRouter.post("/admin/login", (req, res) => {
+  const { password } = req.body;
+  if (password === adminPasswordHash) {
+    res.json({ success: true, token: "admin-session-token-2026" });
+  } else {
+    res.status(401).json({ success: false, message: "Contraseña incorrecta." });
+  }
+});
+
+apiRouter.post("/admin/change-password", (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (currentPassword !== adminPasswordHash) {
+    return res.status(400).json({ success: false, message: "La contraseña actual es incorrecta." });
+  }
+  if (!newPassword || newPassword.length < 4) {
+    return res.status(400).json({ success: false, message: "La nueva contraseña debe tener al menos 4 caracteres." });
+  }
+  adminPasswordHash = newPassword;
+  isPasswordModified = true;
+
+  // Create admin notification log
+  notifications.unshift({
+    id: `notif-${Date.now()}`,
+    targetRole: 'admin',
+    title: 'Seguridad Actualizada 🔒',
+    message: 'La contraseña de administrador ha sido cambiada exitosamente.',
+    timestamp: new Date().toISOString(),
+    read: false,
+    type: 'reminder'
   });
 
-  app.post("/api/admin/login", (req, res) => {
-    const { password } = req.body;
-    if (password === adminPasswordHash) {
-      res.json({ success: true, token: "admin-session-token-2026" });
-    } else {
-      res.status(401).json({ success: false, message: "Contraseña incorrecta." });
-    }
+  res.json({ success: true, message: "Contraseña cambiada exitosamente." });
+});
+
+apiRouter.post("/admin/reset-password", (req, res) => {
+  adminPasswordHash = "admin123";
+  isPasswordModified = false;
+
+  notifications.unshift({
+    id: `notif-${Date.now()}`,
+    targetRole: 'admin',
+    title: 'Contraseña Restablecida 🔒',
+    message: 'La contraseña de administrador ha sido restablecida a la contraseña por defecto (admin123).',
+    timestamp: new Date().toISOString(),
+    read: false,
+    type: 'reminder'
   });
 
-  app.post("/api/admin/change-password", (req, res) => {
-    const { currentPassword, newPassword } = req.body;
-    if (currentPassword !== adminPasswordHash) {
-      return res.status(400).json({ success: false, message: "La contraseña actual es incorrecta." });
-    }
-    if (!newPassword || newPassword.length < 4) {
-      return res.status(400).json({ success: false, message: "La nueva contraseña debe tener al menos 4 caracteres." });
-    }
-    adminPasswordHash = newPassword;
-    isPasswordModified = true;
+  res.json({ success: true, message: "La contraseña ha sido restablecida exitosamente a: admin123" });
+});
 
-    // Create admin notification log
+// Requests Endpoints
+apiRouter.get("/requests", (req, res) => {
+  const { clientEmail, cleanerId, status } = req.query;
+  let filtered = [...requests];
+
+  if (clientEmail) {
+    filtered = filtered.filter(r => r.clientEmail?.toLowerCase() === (clientEmail as string).toLowerCase());
+  }
+  if (cleanerId) {
+    filtered = filtered.filter(r => r.cleanerId === cleanerId);
+  }
+  if (status && status !== 'all') {
+    filtered = filtered.filter(r => r.status === status);
+  }
+
+  // Sort by date and time descending
+  filtered.sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
+
+  res.json(filtered);
+});
+
+apiRouter.post("/requests", (req, res) => {
+  const { clientName, clientEmail, clientPhone, clientAddress, whatsapp, date, time, durationHours, notes } = req.body;
+
+  if (!clientName || !clientPhone || !clientAddress || !date || !time) {
+    return res.status(400).json({ success: false, message: "Por favor complete todos los campos requeridos." });
+  }
+
+  const newReq: CleaningRequest = {
+    id: `req-${Date.now().toString().slice(-6)}`,
+    clientName,
+    clientEmail: clientEmail || "cliente@ejemplo.com",
+    clientPhone,
+    clientAddress,
+    whatsapp: whatsapp || clientPhone,
+    date,
+    time,
+    durationHours: durationHours || 3,
+    notes: notes || "",
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  requests.unshift(newReq);
+
+  // Create notifications for Admin and Client
+  notifications.unshift({
+    id: `notif-${Date.now()}-1`,
+    targetRole: 'admin',
+    title: '🔔 Nueva Solicitud de Limpieza',
+    message: `${clientName} ha solicitado aseo para el ${date} a las ${time} en ${clientAddress}.`,
+    timestamp: new Date().toISOString(),
+    read: false,
+    requestId: newReq.id,
+    type: 'request_created'
+  });
+
+  if (clientEmail) {
     notifications.unshift({
-      id: `notif-${Date.now()}`,
-      targetRole: 'admin',
-      title: 'Seguridad Actualizada 🔒',
-      message: 'La contraseña de administrador ha sido cambiada exitosamente.',
-      timestamp: new Date().toISOString(),
-      read: false,
-      type: 'reminder'
-    });
-
-    res.json({ success: true, message: "Contraseña cambiada exitosamente." });
-  });
-
-  app.post("/api/admin/reset-password", (req, res) => {
-    adminPasswordHash = "admin123";
-    isPasswordModified = false;
-
-    notifications.unshift({
-      id: `notif-${Date.now()}`,
-      targetRole: 'admin',
-      title: 'Contraseña Restablecida 🔒',
-      message: 'La contraseña de administrador ha sido restablecida a la contraseña por defecto (admin123).',
-      timestamp: new Date().toISOString(),
-      read: false,
-      type: 'reminder'
-    });
-
-    res.json({ success: true, message: "La contraseña ha sido restablecida exitosamente a: admin123" });
-  });
-
-  // Requests Endpoints
-  app.get("/api/requests", (req, res) => {
-    const { clientEmail, cleanerId, status } = req.query;
-    let filtered = [...requests];
-
-    if (clientEmail) {
-      filtered = filtered.filter(r => r.clientEmail?.toLowerCase() === (clientEmail as string).toLowerCase());
-    }
-    if (cleanerId) {
-      filtered = filtered.filter(r => r.cleanerId === cleanerId);
-    }
-    if (status && status !== 'all') {
-      filtered = filtered.filter(r => r.status === status);
-    }
-
-    // Sort by date and time descending
-    filtered.sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
-
-    res.json(filtered);
-  });
-
-  app.post("/api/requests", (req, res) => {
-    const { clientName, clientEmail, clientPhone, clientAddress, whatsapp, date, time, durationHours, notes } = req.body;
-
-    if (!clientName || !clientPhone || !clientAddress || !date || !time) {
-      return res.status(400).json({ success: false, message: "Por favor complete todos los campos requeridos." });
-    }
-
-    const newReq: CleaningRequest = {
-      id: `req-${Date.now().toString().slice(-6)}`,
-      clientName,
-      clientEmail: clientEmail || "cliente@ejemplo.com",
-      clientPhone,
-      clientAddress,
-      whatsapp: whatsapp || clientPhone,
-      date,
-      time,
-      durationHours: durationHours || 3,
-      notes: notes || "",
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    requests.unshift(newReq);
-
-    // Create notifications for Admin and Client
-    notifications.unshift({
-      id: `notif-${Date.now()}-1`,
-      targetRole: 'admin',
-      title: '🔔 Nueva Solicitud de Limpieza',
-      message: `${clientName} ha solicitado aseo para el ${date} a las ${time} en ${clientAddress}.`,
+      id: `notif-${Date.now()}-2`,
+      targetRole: 'client',
+      targetEmail: clientEmail,
+      title: 'Solicitud Recibida 🧹',
+      message: `Hola ${clientName}, tu solicitud para el ${date} a las ${time} fue registrada. Te avisaremos apenas el administrador la confirme.`,
       timestamp: new Date().toISOString(),
       read: false,
       requestId: newReq.id,
       type: 'request_created'
     });
+  }
 
-    if (clientEmail) {
+  res.status(201).json({ success: true, request: newReq });
+});
+
+apiRouter.patch("/requests/:id", (req, res) => {
+  const { id } = req.params;
+  const { status, cleanerId, adminNotes, completionNotes, time, date } = req.body;
+
+  const reqIndex = requests.findIndex(r => r.id === id);
+  if (reqIndex === -1) {
+    return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
+  }
+
+  const item = requests[reqIndex];
+  const prevStatus = item.status;
+
+  if (status) item.status = status;
+  if (date) item.date = date;
+  if (time) item.time = time;
+  if (adminNotes !== undefined) item.adminNotes = adminNotes;
+  if (completionNotes !== undefined) item.completionNotes = completionNotes;
+
+  if (cleanerId) {
+    const cleaner = cleaners.find(c => c.id === cleanerId);
+    if (cleaner) {
+      item.cleanerId = cleaner.id;
+      item.cleanerName = cleaner.name;
+
+      // Create cleaner notification
       notifications.unshift({
-        id: `notif-${Date.now()}-2`,
-        targetRole: 'client',
-        targetEmail: clientEmail,
-        title: 'Solicitud Recibida 🧹',
-        message: `Hola ${clientName}, tu solicitud para el ${date} a las ${time} fue registrada. Te avisaremos apenas el administrador la confirme.`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        requestId: newReq.id,
-        type: 'request_created'
-      });
-    }
-
-    res.status(201).json({ success: true, request: newReq });
-  });
-
-  app.patch("/api/requests/:id", (req, res) => {
-    const { id } = req.params;
-    const { status, cleanerId, adminNotes, completionNotes, time, date } = req.body;
-
-    const reqIndex = requests.findIndex(r => r.id === id);
-    if (reqIndex === -1) {
-      return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
-    }
-
-    const item = requests[reqIndex];
-    const prevStatus = item.status;
-
-    if (status) item.status = status;
-    if (date) item.date = date;
-    if (time) item.time = time;
-    if (adminNotes !== undefined) item.adminNotes = adminNotes;
-    if (completionNotes !== undefined) item.completionNotes = completionNotes;
-
-    if (cleanerId) {
-      const cleaner = cleaners.find(c => c.id === cleanerId);
-      if (cleaner) {
-        item.cleanerId = cleaner.id;
-        item.cleanerName = cleaner.name;
-
-        // Create cleaner notification
-        notifications.unshift({
-          id: `notif-${Date.now()}-cleaner`,
-          targetRole: 'cleaner',
-          title: '🧹 Nuevo Trabajo Asignado',
-          message: `${cleaner.name}, fuiste asignado(a) al servicio de ${item.clientName} en ${item.clientAddress} para el ${item.date} a las ${item.time}.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          requestId: item.id,
-          type: 'cleaner_assigned'
-        });
-      }
-    }
-
-    if (status === 'confirmed' && prevStatus !== 'confirmed') {
-      item.confirmedAt = new Date().toISOString();
-
-      // Client Notification for confirmation
-      notifications.unshift({
-        id: `notif-${Date.now()}-confirmed`,
-        targetRole: 'client',
-        targetEmail: item.clientEmail,
-        title: '¡Cita Confirmada! ✅',
-        message: `Tu servicio de limpieza para el ${item.date} a las ${item.time} en ${item.clientAddress} ha sido CONFIRMADO. Personal asignado: ${item.cleanerName || 'Staff AseoPlanner'}.`,
+        id: `notif-${Date.now()}-cleaner`,
+        targetRole: 'cleaner',
+        title: '🧹 Nuevo Trabajo Asignado',
+        message: `${cleaner.name}, fuiste asignado(a) al servicio de ${item.clientName} en ${item.clientAddress} para el ${item.date} a las ${item.time}.`,
         timestamp: new Date().toISOString(),
         read: false,
         requestId: item.id,
-        type: 'request_confirmed'
-      });
-    } else if (status && status !== prevStatus) {
-      const statusLabels: Record<string, string> = {
-        in_progress: "en proceso",
-        completed: "completada con éxito",
-        cancelled: "cancelada"
-      };
-      notifications.unshift({
-        id: `notif-${Date.now()}-status`,
-        targetRole: 'client',
-        targetEmail: item.clientEmail,
-        title: `Actualización de Servicio 📌`,
-        message: `Tu solicitud de aseo ahora se encuentra ${statusLabels[status] || status}.`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        requestId: item.id,
-        type: 'status_changed'
+        type: 'cleaner_assigned'
       });
     }
+  }
 
-    item.updatedAt = new Date().toISOString();
-    requests[reqIndex] = item;
+  if (status === 'confirmed' && prevStatus !== 'confirmed') {
+    item.confirmedAt = new Date().toISOString();
 
-    res.json({ success: true, request: item });
-  });
-
-  app.delete("/api/requests/:id", (req, res) => {
-    const { id } = req.params;
-    const initialLen = requests.length;
-    requests = requests.filter(r => r.id !== id);
-
-    if (requests.length === initialLen) {
-      return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
-    }
-
-    res.json({ success: true, message: "Solicitud eliminada exitosamente." });
-  });
-
-  // Cleaners Endpoints
-  app.get("/api/cleaners", (req, res) => {
-    // Add active task counts
-    const enriched = cleaners.map(c => {
-      const activeCount = requests.filter(r => r.cleanerId === c.id && (r.status === 'confirmed' || r.status === 'in_progress')).length;
-      return {
-        ...c,
-        activeTasks: activeCount
-      };
+    // Client Notification for confirmation
+    notifications.unshift({
+      id: `notif-${Date.now()}-confirmed`,
+      targetRole: 'client',
+      targetEmail: item.clientEmail,
+      title: '¡Cita Confirmada! ✅',
+      message: `Tu servicio de limpieza para el ${item.date} a las ${item.time} en ${item.clientAddress} ha sido CONFIRMADO. Personal asignado: ${item.cleanerName || 'Staff AseoPlanner'}.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      requestId: item.id,
+      type: 'request_confirmed'
     });
-    res.json(enriched);
-  });
-
-  app.post("/api/cleaners", (req, res) => {
-    const { name, phone, whatsapp, specialty, avatar } = req.body;
-    if (!name || !phone) {
-      return res.status(400).json({ success: false, message: "Nombre y teléfono son obligatorios." });
-    }
-
-    const newCleaner: Cleaner = {
-      id: `cleaner-${Date.now()}`,
-      name,
-      phone,
-      whatsapp: whatsapp || phone,
-      avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-      status: 'active',
-      rating: 5.0,
-      completedTasks: 0,
-      specialty: specialty || "Aseo General"
+  } else if (status && status !== prevStatus) {
+    const statusLabels: Record<string, string> = {
+      in_progress: "en proceso",
+      completed: "completada con éxito",
+      cancelled: "cancelada"
     };
-
-    cleaners.push(newCleaner);
-    res.status(201).json({ success: true, cleaner: newCleaner });
-  });
-
-  // Notifications Endpoints
-  app.get("/api/notifications", (req, res) => {
-    const { role, email } = req.query;
-    let list = [...notifications];
-
-    if (role) {
-      list = list.filter(n => n.targetRole === 'all' || n.targetRole === role || (email && n.targetEmail === email));
-    }
-
-    res.json(list.slice(0, 30));
-  });
-
-  app.patch("/api/notifications/:id/read", (req, res) => {
-    const { id } = req.params;
-    const notif = notifications.find(n => n.id === id);
-    if (notif) {
-      notif.read = true;
-    }
-    res.json({ success: true });
-  });
-
-  app.post("/api/notifications/mark-all-read", (req, res) => {
-    notifications.forEach(n => n.read = true);
-    res.json({ success: true });
-  });
-
-  // Google Calendar Integration API endpoint
-  app.post("/api/calendar/sync-event", (req, res) => {
-    const { requestId, accessToken } = req.body;
-    const reqItem = requests.find(r => r.id === requestId);
-
-    if (!reqItem) {
-      return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
-    }
-
-    // Generate standard Google Calendar Event Object
-    const startDateTime = new Date(`${reqItem.date}T${reqItem.time}:00`).toISOString();
-    const endDateTime = new Date(new Date(`${reqItem.date}T${reqItem.time}:00`).getTime() + (reqItem.durationHours || 3) * 3600000).toISOString();
-
-    const calendarEventPayload = {
-      summary: `🧹 Aseo Departamento: ${reqItem.clientName}`,
-      location: reqItem.clientAddress,
-      description: `Servicio de Aseo de Departamento AseoPlanner.\nCliente: ${reqItem.clientName}\nTeléfono / WhatsApp: ${reqItem.whatsapp}\nPersonal asignado: ${reqItem.cleanerName || 'Sin asignar'}\nNotas: ${reqItem.notes || 'N/A'}\nEstado: ${reqItem.status.toUpperCase()}`,
-      start: {
-        dateTime: startDateTime,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santiago'
-      },
-      end: {
-        dateTime: endDateTime,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santiago'
-      },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'email', minutes: 24 * 60 },
-          { method: 'popup', minutes: 60 },
-          { method: 'popup', minutes: 15 }
-        ]
-      }
-    };
-
-    // Quick direct web URL for opening in Google Calendar as fallback / instant client add
-    const googleCalendarWebUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE` +
-      `&text=${encodeURIComponent(calendarEventPayload.summary)}` +
-      `&dates=${startDateTime.replace(/-|:|\.\d\d\d/g, "")}/${endDateTime.replace(/-|:|\.\d\d\d/g, "")}` +
-      `&details=${encodeURIComponent(calendarEventPayload.description)}` +
-      `&location=${encodeURIComponent(reqItem.clientAddress)}`;
-
-    res.json({
-      success: true,
-      eventPayload: calendarEventPayload,
-      googleCalendarWebUrl,
-      message: "Evento de calendario generado correctamente con recordatorios sincronizados."
+    notifications.unshift({
+      id: `notif-${Date.now()}-status`,
+      targetRole: 'client',
+      targetEmail: item.clientEmail,
+      title: `Actualización de Servicio 📌`,
+      message: `Tu solicitud de aseo ahora se encuentra ${statusLabels[status] || status}.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      requestId: item.id,
+      type: 'status_changed'
     });
+  }
+
+  item.updatedAt = new Date().toISOString();
+  requests[reqIndex] = item;
+
+  res.json({ success: true, request: item });
+});
+
+apiRouter.delete("/requests/:id", (req, res) => {
+  const { id } = req.params;
+  const initialLen = requests.length;
+  requests = requests.filter(r => r.id !== id);
+
+  if (requests.length === initialLen) {
+    return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
+  }
+
+  res.json({ success: true, message: "Solicitud eliminada exitosamente." });
+});
+
+// Cleaners Endpoints
+apiRouter.get("/cleaners", (req, res) => {
+  // Add active task counts
+  const enriched = cleaners.map(c => {
+    const activeCount = requests.filter(r => r.cleanerId === c.id && (r.status === 'confirmed' || r.status === 'in_progress')).length;
+    return {
+      ...c,
+      activeTasks: activeCount
+    };
   });
+  res.json(enriched);
+});
+
+apiRouter.post("/cleaners", (req, res) => {
+  const { name, phone, whatsapp, specialty, avatar } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ success: false, message: "Nombre y teléfono son obligatorios." });
+  }
+
+  const newCleaner: Cleaner = {
+    id: `cleaner-${Date.now()}`,
+    name,
+    phone,
+    whatsapp: whatsapp || phone,
+    avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+    status: 'active',
+    rating: 5.0,
+    completedTasks: 0,
+    specialty: specialty || "Aseo General"
+  };
+
+  cleaners.push(newCleaner);
+  res.status(201).json({ success: true, cleaner: newCleaner });
+});
+
+// Notifications Endpoints
+apiRouter.get("/notifications", (req, res) => {
+  const { role, email } = req.query;
+  let list = [...notifications];
+
+  if (role) {
+    list = list.filter(n => n.targetRole === 'all' || n.targetRole === role || (email && n.targetEmail === email));
+  }
+
+  res.json(list.slice(0, 30));
+});
+
+apiRouter.patch("/notifications/:id/read", (req, res) => {
+  const { id } = req.params;
+  const notif = notifications.find(n => n.id === id);
+  if (notif) {
+    notif.read = true;
+  }
+  res.json({ success: true });
+});
+
+apiRouter.post("/notifications/mark-all-read", (req, res) => {
+  notifications.forEach(n => n.read = true);
+  res.json({ success: true });
+});
+
+// Google Calendar Integration API endpoint
+apiRouter.post("/calendar/sync-event", (req, res) => {
+  const { requestId } = req.body;
+  const reqItem = requests.find(r => r.id === requestId);
+
+  if (!reqItem) {
+    return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
+  }
+
+  // Generate standard Google Calendar Event Object
+  const startDateTime = new Date(`${reqItem.date}T${reqItem.time}:00`).toISOString();
+  const endDateTime = new Date(new Date(`${reqItem.date}T${reqItem.time}:00`).getTime() + (reqItem.durationHours || 3) * 3600000).toISOString();
+
+  const calendarEventPayload = {
+    summary: `🧹 Aseo Departamento: ${reqItem.clientName}`,
+    location: reqItem.clientAddress,
+    description: `Servicio de Aseo de Departamento AseoPlanner.\nCliente: ${reqItem.clientName}\nTeléfono / WhatsApp: ${reqItem.whatsapp}\nPersonal asignado: ${reqItem.cleanerName || 'Sin asignar'}\nNotas: ${reqItem.notes || 'N/A'}\nEstado: ${reqItem.status.toUpperCase()}`,
+    start: {
+      dateTime: startDateTime,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santiago'
+    },
+    end: {
+      dateTime: endDateTime,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santiago'
+    },
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: 'email', minutes: 24 * 60 },
+        { method: 'popup', minutes: 60 },
+        { method: 'popup', minutes: 15 }
+      ]
+    }
+  };
+
+  // Quick direct web URL for opening in Google Calendar as fallback / instant client add
+  const googleCalendarWebUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+    `&text=${encodeURIComponent(calendarEventPayload.summary)}` +
+    `&dates=${startDateTime.replace(/-|:|\.\d\d\d/g, "")}/${endDateTime.replace(/-|:|\.\d\d\d/g, "")}` +
+    `&details=${encodeURIComponent(calendarEventPayload.description)}` +
+    `&location=${encodeURIComponent(reqItem.clientAddress)}`;
+
+  res.json({
+    success: true,
+    eventPayload: calendarEventPayload,
+    googleCalendarWebUrl,
+    message: "Evento de calendario generado correctamente con recordatorios sincronizados."
+  });
+});
+
+// Mount router under both /api and / so all Vercel route rewrites resolve cleanly
+app.use("/api", apiRouter);
+app.use("/", apiRouter);
 
 async function startServer() {
   const PORT = 3000;
