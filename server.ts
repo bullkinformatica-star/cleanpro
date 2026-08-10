@@ -233,12 +233,19 @@ let notifications: AppNotification[] = [
 
 export const app = express();
 
-app.use(express.json());
+// Custom body parser middleware compatible with Vercel serverless functions
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // Enable CORS for Vercel deployments and client requests
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
@@ -248,7 +255,11 @@ app.use((req, res, next) => {
 
 const apiRouter = express.Router();
 
-// Health endpoint
+// Health endpoints
+apiRouter.get("/", (req, res) => {
+  res.json({ status: "ok", appName: "AseoPlanner API" });
+});
+
 apiRouter.get("/health", (req, res) => {
   res.json({ status: "ok", appName: "AseoPlanner API" });
 });
