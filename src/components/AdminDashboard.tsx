@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Lock, KeyRound, UserCheck, Clock, CheckCircle2, AlertCircle, RefreshCw, MessageSquare, Plus, Trash2, Edit3, Save, Search, Sparkles, Filter, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
 import { CleaningRequest, Cleaner } from '../types';
-import { fetchRequests, fetchCleaners, updateRequestStatus, deleteRequest, addCleaner, adminLogin, changeAdminPassword, checkAdminPasswordStatus, generateWhatsAppLink, syncGoogleCalendarEvent } from '../services/api';
+import { fetchRequests, fetchCleaners, updateRequestStatus, deleteRequest, addCleaner, adminLogin, changeAdminPassword, checkAdminPasswordStatus, resetAdminPassword, generateWhatsAppLink, syncGoogleCalendarEvent } from '../services/api';
 
 export const AdminDashboard: React.FC = () => {
   // Auth state
@@ -54,6 +54,17 @@ export const AdminDashboard: React.FC = () => {
       setIsAuthenticated(true);
     } else {
       setAuthError(result.message || 'Contraseña incorrecta.');
+    }
+  };
+
+  const handleResetDefaultPassword = async () => {
+    setAuthError(null);
+    const res = await resetAdminPassword();
+    if (res.success) {
+      setPasswordInput('admin123');
+      setAuthError('🔑 Contraseña restablecida con éxito a "admin123". Haz clic en Ingresar al Panel.');
+    } else {
+      setAuthError('Error al restablecer contraseña.');
     }
   };
 
@@ -138,7 +149,11 @@ export const AdminDashboard: React.FC = () => {
           </p>
 
           {authError && (
-            <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs text-center font-medium">
+            <div className={`mb-4 p-3 rounded-md text-xs text-center font-medium ${
+              authError.includes('🔑') 
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                : 'bg-red-50 border border-red-200 text-red-700'
+            }`}>
               {authError}
             </div>
           )}
@@ -159,7 +174,7 @@ export const AdminDashboard: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-200 rounded-md pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Contraseña por defecto: <code className="text-blue-600 font-bold">admin123</code> (editable en ajustes)</p>
+              <p className="text-[10px] text-slate-400 mt-1">Contraseña por defecto: <code className="text-blue-600 font-bold">admin123</code></p>
             </div>
 
             <button
@@ -168,6 +183,16 @@ export const AdminDashboard: React.FC = () => {
             >
               Ingresar al Panel
             </button>
+
+            <div className="pt-2 border-t border-slate-100 text-center">
+              <button
+                type="button"
+                onClick={handleResetDefaultPassword}
+                className="text-xs text-slate-500 hover:text-blue-600 font-medium underline transition-colors"
+              >
+                ¿Olvidaste la contraseña? Restablecer a admin123
+              </button>
+            </div>
           </form>
         </div>
       </div>

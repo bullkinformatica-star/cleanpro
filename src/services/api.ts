@@ -148,6 +148,18 @@ export async function checkAdminPasswordStatus(): Promise<{ isModified: boolean 
   }
 }
 
+export async function resetAdminPassword(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/admin/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false, message: 'Error al restablecer la contraseña.' };
+  }
+}
+
 export async function syncGoogleCalendarEvent(requestId: string): Promise<{ success: boolean; googleCalendarWebUrl?: string; message?: string }> {
   try {
     const res = await fetch('/api/calendar/sync-event', {

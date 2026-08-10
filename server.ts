@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 
 interface CleaningRequest {
   id: string;
@@ -234,15 +233,23 @@ let notifications: AppNotification[] = [
 
 export const app = express();
 
-async function startServer() {
-  const PORT = 3000;
+app.use(express.json());
 
-  app.use(express.json());
+// Enable CORS for Vercel deployments and client requests
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
-  // Health endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", appName: "AseoPlanner API" });
-  });
+// Health endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", appName: "AseoPlanner API" });
+});
 
   // Admin auth & password routes
   app.get("/api/admin/password-status", (req, res) => {
@@ -281,6 +288,23 @@ async function startServer() {
     });
 
     res.json({ success: true, message: "Contraseña cambiada exitosamente." });
+  });
+
+  app.post("/api/admin/reset-password", (req, res) => {
+    adminPasswordHash = "admin123";
+    isPasswordModified = false;
+
+    notifications.unshift({
+      id: `notif-${Date.now()}`,
+      targetRole: 'admin',
+      title: 'Contraseña Restablecida 🔒',
+      message: 'La contraseña de administrador ha sido restablecida a la contraseña por defecto (admin123).',
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'reminder'
+    });
+
+    res.json({ success: true, message: "La contraseña ha sido restablecida exitosamente a: admin123" });
   });
 
   // Requests Endpoints
@@ -559,14 +583,18 @@ async function startServer() {
     });
   });
 
+async function startServer() {
+  const PORT = 3000;
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
@@ -574,13 +602,15 @@ async function startServer() {
     });
   }
 
-  if (process.env.VERCEL !== "1") {
+  if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
   }
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
 
 export default app;
