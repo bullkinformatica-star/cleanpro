@@ -239,27 +239,25 @@ app.use((req, res, next) => {
     return next();
   }
 
-  if (process.env.VERCEL || process.env.VERCEL_ENV) {
-    if (typeof req.body === 'string' && req.body.trim().length > 0) {
-      try {
-        req.body = JSON.parse(req.body);
-      } catch (e) {
-        // ignore
-      }
-    } else if (!req.body) {
-      req.body = {};
+  if (typeof req.body === 'string' && req.body.trim().length > 0) {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      // ignore
     }
     return next();
   }
 
-  if (req.body !== undefined && req.body !== null) {
-    if (typeof req.body === 'string' && req.body.trim().length > 0) {
-      try {
-        req.body = JSON.parse(req.body);
-      } catch (e) {
-        // ignore
-      }
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      req.body = JSON.parse(req.body.toString('utf-8'));
+    } catch (e) {
+      // ignore
     }
+    return next();
+  }
+
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
     return next();
   }
 
