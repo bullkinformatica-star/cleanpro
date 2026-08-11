@@ -233,13 +233,37 @@ let notifications: AppNotification[] = [
 
 export const app = express();
 
-// Custom body parser middleware compatible with Vercel serverless functions
+// Custom body parser middleware compatible with Vercel serverless functions & local Node
 app.use((req, res, next) => {
-  if (req.body && typeof req.body === 'object') {
-    next();
-  } else {
-    express.json()(req, res, next);
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return next();
   }
+
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    if (typeof req.body === 'string' && req.body.trim().length > 0) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        // ignore
+      }
+    } else if (!req.body) {
+      req.body = {};
+    }
+    return next();
+  }
+
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'string' && req.body.trim().length > 0) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return next();
+  }
+
+  express.json({ limit: '10mb' })(req, res, next);
 });
 
 // Enable CORS for Vercel deployments and client requests

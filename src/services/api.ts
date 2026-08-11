@@ -23,6 +23,16 @@ export async function createCleaningRequest(data: Omit<CleaningRequest, 'id' | '
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('createCleaningRequest HTTP error:', res.status, errText);
+      try {
+        const parsed = JSON.parse(errText);
+        return { success: false, message: parsed.message || `Error del servidor (${res.status}).` };
+      } catch (e) {
+        return { success: false, message: `Error de servidor (${res.status}).` };
+      }
+    }
     return await res.json();
   } catch (err) {
     console.error('createCleaningRequest error:', err);
