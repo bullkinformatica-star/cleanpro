@@ -243,7 +243,7 @@ app.use((req, res, next) => {
     try {
       req.body = JSON.parse(req.body);
     } catch (e) {
-      // ignore
+      req.body = {};
     }
     return next();
   }
@@ -252,12 +252,18 @@ app.use((req, res, next) => {
     try {
       req.body = JSON.parse(req.body.toString('utf-8'));
     } catch (e) {
-      // ignore
+      req.body = {};
     }
     return next();
   }
 
-  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+  if (req.body && typeof req.body === 'object') {
+    return next();
+  }
+
+  // On Vercel, body stream is pre-consumed
+  if (process.env.VERCEL || process.env.VERCEL_ENV || req.headers['x-vercel-id']) {
+    req.body = req.body || {};
     return next();
   }
 
@@ -364,7 +370,7 @@ apiRouter.get("/requests", (req, res) => {
 });
 
 apiRouter.post("/requests", (req, res) => {
-  const { clientName, clientEmail, clientPhone, clientAddress, whatsapp, date, time, durationHours, notes } = req.body;
+  const { clientName, clientEmail, clientPhone, clientAddress, whatsapp, date, time, durationHours, notes } = req.body || {};
 
   if (!clientName || !clientPhone || !clientAddress || !date || !time) {
     return res.status(400).json({ success: false, message: "Por favor complete todos los campos requeridos." });
@@ -620,6 +626,16 @@ apiRouter.post("/calendar/sync-event", (req, res) => {
 
 // Mount router under /api for all API endpoints
 app.use("/api", apiRouter);
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Global API Error:", err);
+  res.status(500).json({
+    success: false,
+    message: err?.message || "Error interno del servidor.",
+    error: process.env.NODE_ENV !== "production" ? String(err) : undefined
+  });
+});
 
 async function startServer() {
   const PORT = 3000;
