@@ -234,40 +234,37 @@ let notifications: AppNotification[] = [
 export const app = express();
 
 // Custom body parser middleware compatible with Vercel serverless functions & local Node
-app.use((req, res, next) => {
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return next();
   }
 
-  if (typeof req.body === 'string' && req.body.trim().length > 0) {
-    try {
-      req.body = JSON.parse(req.body);
-    } catch (e) {
-      req.body = {};
+  // If Vercel or upstream already populated req.body
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'string' && req.body.trim().length > 0) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        req.body = {};
+      }
+    } else if (Buffer.isBuffer(req.body)) {
+      try {
+        req.body = JSON.parse(req.body.toString('utf-8'));
+      } catch (e) {
+        req.body = {};
+      }
     }
     return next();
   }
 
-  if (Buffer.isBuffer(req.body)) {
-    try {
-      req.body = JSON.parse(req.body.toString('utf-8'));
-    } catch (e) {
+  // Fallback to express.json for unconsumed body streams
+  express.json({ limit: '10mb' })(req, res, (err) => {
+    if (err) {
+      console.error("Express JSON body parser error:", err);
       req.body = {};
     }
-    return next();
-  }
-
-  if (req.body && typeof req.body === 'object') {
-    return next();
-  }
-
-  // On Vercel, body stream is pre-consumed
-  if (process.env.VERCEL || process.env.VERCEL_ENV || req.headers['x-vercel-id']) {
-    req.body = req.body || {};
-    return next();
-  }
-
-  express.json({ limit: '10mb' })(req, res, next);
+    next();
+  });
 });
 
 // Enable CORS for Vercel deployments and client requests
